@@ -13,15 +13,15 @@ venv/
 env/
 
 # Checkpoints and model weights
-checkpoints/
+/checkpoints/
 *.pt
 *.pth
 *.safetensors
 *.bin
-models/
+/models/
 
-# Data files
-data/
+# Data files (only top-level data dir, not src/data package)
+/data/
 *.mp4
 *.avi
 *.mov
