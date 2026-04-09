@@ -1,0 +1,212 @@
+# Video Generation Fine-Tuning with RLHF / Preference Alignment
+
+**Domain-specific LoRA fine-tuning of CogVideoX-2B with iterative DPO driven by automated and human preference signals.**
+
+This project extends the RLHF methodology from [rlhf-and-reward-modelling-alt](https://github.com/kartikmunjal/rlhf-and-reward-modelling-alt) to video generation. The math is identical — we swap token log-probabilities for diffusion denoising likelihoods — but applied to a new modality. The research trajectory is: RLHF in text → RLHF in audio (TTS) → RLHF in video. This is Notebook 17 from the prior repo, scaled up.
+
+---
+
+## Methodology
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  CogVideoX-2B (pre-trained, frozen)                             │
+│  THUDM/CogVideoX-2b  —  DiT architecture, 2B params            │
+└──────────────────────┬───────────────────────────────────────────┘
+                       │
+         ┌─────────────▼────────────────┐
+         │  Stage 1: LoRA Fine-tuning  │
+         │  Inject low-rank adapters   │
+         │  into attention layers      │
+         │  r ∈ {4, 8, 16, 32}        │
+         │  Train on domain subset     │
+         └─────────────┬────────────────┘
+                       │
+         ┌─────────────▼──────────────────────────┐
+         │  Stage 2: Reward Model Training       │
+         │  Video quality signals:               │
+         │    • Motion smoothness (optical flow) │
+         │    • Temporal consistency (LPIPS)     │
+         │    • Prompt adherence (CLIP score)    │
+         │  Bradley-Terry head on video features │
+         │  Trained on automated + human pairs  │
+         └─────────────┬──────────────────────────┘
+                       │
+         ┌─────────────▼──────────────────────────────────────────┐
+         │  Stage 3: Iterative DPO (DiffusionDPO adaptation)    │
+         │                                                        │
+         │  L_DPO = -log σ( β·(log p_θ(v_w|c) - log p_ref(v_w|c))│
+         │                 - β·(log p_θ(v_l|c) - log p_ref(v_l|c)))│
+         │                                                        │
+         │  where log p(v|c) ≈ -Σ_t ||ε - ε_θ(v_t, t, c)||²   │
+         │                                                        │
+         │  Loop: generate pairs → score → DPO update → repeat  │
+         └────────────────────────────────────────────────────────┘
+```
+
+### DiffusionDPO — Key Insight
+
+For autoregressive LMs, DPO uses token log-probs. For diffusion models we use the **ELBO** (evidence lower bound) as the log-likelihood proxy:
+
+```
+log p_θ(v|c) ≈ -E_t[ ||ε - ε_θ(v_t, t, c)||² ]
+```
+
+where `v_t` is the noisy video at timestep `t`, `ε` is the true noise, and `ε_θ` is the model's noise prediction. The DPO loss becomes a margin on denoising errors between the policy and the frozen reference — no reward model needed at training time.
+
+### Connection to Prior RLHF Work
+
+| Component | Text RLHF (prior repo) | Video RLHF (this repo) |
+|---|---|---|
+| Base model | GPT-2-medium | CogVideoX-2B |
+| Fine-tuning | SFT on chosen responses | LoRA on domain videos |
+| Preference signal | Bradley-Terry on text | Bradley-Terry on video frames |
+| Policy optimization | PPO / DPO | DiffusionDPO / reward-weighted |
+| PEFT | LoRA on attention | LoRA on DiT attention |
+| Iterative | Iterative DPO (Nb 14) | Iterative DiffusionDPO |
+| Human-in-loop | Constitutional AI | Gradio annotation interface |
+
+---
+
+## Project Structure
+
+```
+Video-Generation/
+├── configs/
+│   ├── cogvideox_lora.yaml        # LoRA fine-tuning hyperparams
+│   ├── reward_config.yaml         # Reward model training
+│   ├── dpo_config.yaml            # DiffusionDPO hyperparams
+│   ├── iterative_dpo_config.yaml  # Iterative loop config
+│   └── ablation_config.yaml       # Ablation grid
+├── src/
+│   ├── data/
+│   │   ├── video_dataset.py       # Video + caption dataset
+│   │   ├── preference_dataset.py  # (prompt, v_chosen, v_rejected) triplets
+│   │   └── video_metrics.py       # Automated quality metrics
+│   ├── models/
+│   │   ├── lora_adapter.py        # LoRA injection into CogVideoX
+│   │   └── video_reward_model.py  # Multi-signal reward model
+│   ├── training/
+│   │   ├── lora_finetune.py       # Stage 1: domain fine-tuning
+│   │   ├── reward_train.py        # Stage 2: reward model training
+│   │   ├── dpo_video.py           # Stage 3: DiffusionDPO
+│   │   └── iterative_dpo.py       # Stage 3: iterative DPO loop
+│   └── evaluation/
+│       └── evaluate.py            # Holdout evaluation
+├── scripts/
+│   ├── generate_videos.py         # Generate clips from prompts
+│   ├── collect_preferences.py     # Build automated preference dataset
+│   ├── train_lora.py              # Train LoRA adapter
+│   ├── train_reward.py            # Train reward model
+│   ├── train_dpo.py               # Run DiffusionDPO
+│   ├── run_iterative_dpo.py       # Run iterative alignment loop
+│   └── run_ablation.py            # LoRA rank / reward signal ablations
+├── annotation/
+│   └── gradio_app.py              # Human-in-the-loop annotation UI
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_lora_finetuning.ipynb
+│   ├── 03_reward_modeling.ipynb
+│   ├── 04_dpo_training.ipynb
+│   ├── 05_iterative_dpo.ipynb
+│   └── 06_ablation_analysis.ipynb
+└── eval/
+    └── metrics_report.py
+```
+
+---
+
+## Setup
+
+```bash
+git clone https://github.com/kartikmunjal/Video-Generation.git
+cd Video-Generation
+pip install -e .
+```
+
+Requires Python 3.10+, CUDA 12.1+, ~24GB VRAM (A100 recommended; RunPod works).
+
+### Quick Start
+
+```bash
+# 1. Fine-tune CogVideoX-2B on your domain
+python scripts/train_lora.py --config configs/cogvideox_lora.yaml
+
+# 2. Build preference dataset (automated metrics)
+python scripts/collect_preferences.py --model_path checkpoints/lora --out data/prefs_auto.json
+
+# 3. (Optional) Add human preferences via Gradio
+python annotation/gradio_app.py --input data/prefs_auto.json
+
+# 4. Train reward model on preference pairs
+python scripts/train_reward.py --config configs/reward_config.yaml
+
+# 5. Run DiffusionDPO
+python scripts/train_dpo.py --config configs/dpo_config.yaml
+
+# 6. Iterative alignment
+python scripts/run_iterative_dpo.py --config configs/iterative_dpo_config.yaml
+
+# 7. Ablation sweep
+python scripts/run_ablation.py --config configs/ablation_config.yaml
+```
+
+---
+
+## Ablations
+
+| Ablation | Variable | Values tested |
+|---|---|---|
+| LoRA rank | `lora_r` | 4, 8, 16, 32 |
+| Reward signal | `reward_weights` | CLIP-only, flow-only, temporal-only, composite |
+| Data composition | `domain_ratio` | 0.25, 0.5, 0.75, 1.0 |
+| DPO β | `beta` | 0.1, 0.5, 1.0, 2.0 |
+| Iterative rounds | `num_iterations` | 1, 2, 3, 5 |
+
+See `notebooks/06_ablation_analysis.ipynb` for results.
+
+---
+
+## Model: CogVideoX-2B
+
+- Architecture: Diffusion Transformer (DiT), 2B parameters
+- Text encoder: T5-XXL
+- Resolution: 480×720, up to 49 frames (~6s at 8fps)
+- HuggingFace: `THUDM/CogVideoX-2b`
+- License: CogVideoX License (non-commercial research)
+
+Alternative: `a-r-r-o-w/LTX-Video` — faster inference, lower quality ceiling.
+
+---
+
+## Human-in-the-Loop
+
+The Gradio annotation interface (`annotation/gradio_app.py`) displays two generated video clips side by side and records preference labels. This directly parallels the Constitutional AI pipeline in the prior repo but replaces the LLM judge with a human rater.
+
+```
+┌─────────────────────────────────────┐
+│ Prompt: "a cat jumping over a fence"│
+├─────────────────┬───────────────────┤
+│   Video A       │    Video B        │
+│   [clip plays]  │    [clip plays]   │
+├─────────────────┴───────────────────┤
+│   [A is better] [Tie] [B is better] │
+│   Optional: reason text box         │
+└─────────────────────────────────────┘
+```
+
+Collected preferences are saved to JSON and merged with automated pairs for reward model training.
+
+---
+
+## Prior Work & Citations
+
+- **DiffusionDPO**: Wallace et al. (2023) — "Diffusion Model Alignment Using Direct Preference Optimization"
+- **CogVideoX**: Yang et al. (2024) — "CogVideoX: Text-to-Video Diffusion Models with An Expert Transformer"
+- **DPO**: Rafailov et al. (2023) — "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"
+- **LoRA**: Hu et al. (2021) — "LoRA: Low-Rank Adaptation of Large Language Models"
+- **InstructVideo**: Wei et al. (2024) — "InstructVideo: Instructing Video Diffusion Models with Human Feedback"
+
+---
+
+*This repo extends [rlhf-and-reward-modelling-alt](https://github.com/kartikmunjal/rlhf-and-reward-modelling-alt) from text to video. The math is the same; the modality is new.*
