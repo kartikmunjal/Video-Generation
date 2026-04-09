@@ -1,0 +1,57 @@
+# Iterative DiffusionDPO configuration
+# Run: python scripts/run_iterative_dpo.py --config configs/iterative_dpo_config.yaml
+#
+# Each iteration:
+#   1. Generate N video pairs per prompt using the current policy.
+#   2. Score pairs with the reward model → get (chosen, rejected) labels.
+#   3. Run K DPO gradient steps on the fresh on-policy pairs.
+#   4. Evaluate win rate on held-out prompts vs. the initial LoRA model.
+#   5. Repeat until max_iterations or win_rate >= target.
+
+model:
+  pretrained_model_name_or_path: "THUDM/CogVideoX-2b"
+  lora_checkpoint: "checkpoints/lora"
+  reward_model_checkpoint: "checkpoints/reward_model/best.pt"
+  dtype: "bfloat16"
+
+loop:
+  max_iterations: 5
+  target_win_rate: 0.70              # stop early if win rate exceeds this
+
+generation:
+  prompts_path: "data/train_prompts.txt"   # prompts used for rollout generation
+  eval_prompts_path: "data/eval_prompts.txt"
+  videos_per_prompt: 2               # generate A and B, score both, prefer better
+  num_frames: 16
+  height: 480
+  width: 720
+  guidance_scale: 6.0
+  num_inference_steps: 50
+  seed: null                         # null = random each iteration
+
+dpo:                                 # DPO hyperparams per iteration
+  beta: 0.5
+  num_timesteps: 50
+  learning_rate: 5.0e-7
+  num_grad_steps: 200                # gradient steps per iteration (not full epoch)
+  batch_size: 1
+  gradient_accumulation_steps: 4
+
+buffer:
+  strategy: "rolling2"              # "current" | "rolling2" | "full"
+  # "current": only pairs from this iteration (low variance, can be noisy)
+  # "rolling2": last 2 iterations' pairs (balanced)
+  # "full": all historical pairs (highest signal, distribution mismatch risk)
+
+evaluation:
+  num_eval_prompts: 20
+  eval_every_n_iterations: 1
+
+output:
+  base_dir: "checkpoints/iterative_dpo"
+  save_every_iteration: true
+
+wandb:
+  project: "video-generation-rlhf"
+  run_name: "iterative-dpo"
+  enabled: true

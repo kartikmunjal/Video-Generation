@@ -1,0 +1,42 @@
+# Reward model training configuration
+# Run: python scripts/train_reward.py --config configs/reward_config.yaml
+
+model:
+  clip_model: "ViT-B/32"                 # CLIP backbone for feature extraction
+  hidden_dim: 512                         # intermediate projection dimension
+  dropout: 0.1
+
+data:
+  preference_path: "data/prefs_merged.jsonl"    # merged auto + human prefs
+  source_filter: null                           # null = all; "human" | "automated"
+  num_frames: 16
+  height: 480
+  width: 720
+  train_split: 0.9
+  preload_frames: false                         # true if RAM allows (~100GB for 10k pairs)
+
+training:
+  output_dir: "checkpoints/reward_model"
+  num_epochs: 5
+  batch_size: 8
+  gradient_accumulation_steps: 2
+  learning_rate: 3.0e-5
+  lr_scheduler: "cosine"
+  lr_warmup_steps: 50
+  max_grad_norm: 1.0
+  mixed_precision: "bf16"
+  seed: 42
+  eval_steps: 100
+  save_best: true
+
+metrics:
+  reward_weights:                          # for automated metric composite
+    motion: 0.2
+    temporal: 0.3
+    clip: 0.5
+  device: "cuda"
+
+wandb:
+  project: "video-generation-rlhf"
+  run_name: "reward-model"
+  enabled: true

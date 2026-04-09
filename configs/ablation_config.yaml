@@ -1,0 +1,65 @@
+# Ablation sweep configuration
+# Run: python scripts/run_ablation.py --config configs/ablation_config.yaml
+#
+# Runs all combinations of the specified grid and logs results to wandb.
+
+base_model: "THUDM/CogVideoX-2b"
+base_data: "data/prefs_merged.jsonl"
+eval_prompts: "data/eval_prompts.txt"
+output_dir: "checkpoints/ablations"
+seed: 42
+
+ablations:
+  # Ablation 1: LoRA rank
+  lora_rank:
+    values: [4, 8, 16, 32]
+    sweep_over: "lora.r"
+    metric: "eval/clip_score"        # primary evaluation metric
+    note: "Higher rank = more parameters, diminishing returns expected above r=16"
+
+  # Ablation 2: Reward signal design
+  reward_weights:
+    values:
+      - {motion: 1.0, temporal: 0.0, clip: 0.0}   # motion only
+      - {motion: 0.0, temporal: 1.0, clip: 0.0}   # temporal only
+      - {motion: 0.0, temporal: 0.0, clip: 1.0}   # CLIP only
+      - {motion: 0.2, temporal: 0.3, clip: 0.5}   # composite (default)
+      - {motion: 0.33, temporal: 0.33, clip: 0.34} # equal weight
+    sweep_over: "metrics.reward_weights"
+    metric: "eval/human_win_rate"
+    note: "Test whether composite signal beats single signals for DPO alignment"
+
+  # Ablation 3: Domain data composition ratio
+  domain_ratio:
+    values: [0.25, 0.5, 0.75, 1.0]
+    sweep_over: "data.domain_ratio"
+    metric: "eval/clip_score"
+    note: "Fraction of domain-specific videos vs. general WebVid samples"
+
+  # Ablation 4: DPO beta (KL penalty strength)
+  dpo_beta:
+    values: [0.1, 0.5, 1.0, 2.0]
+    sweep_over: "dpo.beta"
+    metric: "eval/human_win_rate"
+    note: "Low beta = aggressive alignment; high beta = conservative"
+
+  # Ablation 5: Number of iterative DPO rounds
+  iterative_rounds:
+    values: [1, 2, 3, 5]
+    sweep_over: "loop.max_iterations"
+    metric: "eval/human_win_rate"
+    note: "Does iterative DPO saturate after 2-3 rounds?"
+
+eval:
+  metrics:
+    - clip_score          # CLIP similarity to prompt (automated)
+    - motion_smoothness   # optical flow variance (automated)
+    - temporal_consistency  # LPIPS between frames (automated)
+    - human_win_rate      # human preference vs. baseline (manual, subset only)
+  num_videos_per_condition: 50
+  human_eval_subset: 20   # videos shown to human annotators for subset eval
+
+wandb:
+  project: "video-generation-rlhf"
+  run_name_prefix: "ablation"
+  enabled: true

@@ -1,0 +1,58 @@
+# DiffusionDPO training configuration
+# Run: python scripts/train_dpo.py --config configs/dpo_config.yaml
+#
+# DiffusionDPO adapts the DPO objective for diffusion models by replacing
+# token log-probs with the negative diffusion ELBO (denoising error sum).
+# Reference: Wallace et al., 2023 "Diffusion Model Alignment Using DPO"
+
+model:
+  pretrained_model_name_or_path: "THUDM/CogVideoX-2b"
+  lora_checkpoint: "checkpoints/lora"    # start from LoRA fine-tuned checkpoint
+  dtype: "bfloat16"
+
+lora:                                    # must match lora fine-tuning config
+  r: 16
+  alpha: 32
+  target_modules: ["to_q", "to_k", "to_v", "to_out.0", "ff.net.0.proj", "ff.net.2"]
+  bias: "none"
+
+dpo:
+  beta: 0.5                              # KL penalty strength. Ablation: 0.1, 0.5, 1.0, 2.0
+  # β controls how tightly we track the reference policy.
+  # Low β: aggressive preference alignment, risk of reward hacking.
+  # High β: stays close to reference, conservative improvement.
+  loss_type: "sigmoid"                   # "sigmoid" (standard DPO) | "ipo" | "hinge"
+  label_smoothing: 0.0
+  reference_free: false                  # if true, use DPO without reference policy
+
+  # Timestep sampling for ELBO approximation
+  # We uniformly sample T timesteps per video pair and average the loss.
+  # More timesteps = better ELBO estimate but slower step.
+  num_timesteps: 50
+  timestep_sampling: "uniform"          # "uniform" | "logit_normal" (better coverage)
+
+data:
+  preference_path: "data/prefs_merged.jsonl"
+  num_frames: 16
+  height: 480
+  width: 720
+  train_split: 0.9
+
+training:
+  output_dir: "checkpoints/dpo"
+  num_epochs: 2
+  batch_size: 1
+  gradient_accumulation_steps: 8         # effective batch = 8
+  learning_rate: 5.0e-7                  # much lower than LoRA LR (nudge, don't retrain)
+  lr_scheduler: "constant_with_warmup"
+  lr_warmup_steps: 50
+  max_grad_norm: 1.0
+  mixed_precision: "bf16"
+  seed: 42
+  logging_steps: 25
+  save_steps: 200
+
+wandb:
+  project: "video-generation-rlhf"
+  run_name: "dpo-beta0.5"
+  enabled: true

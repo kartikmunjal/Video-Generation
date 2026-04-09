@@ -1,0 +1,55 @@
+# LoRA fine-tuning configuration for CogVideoX-2B
+# Run: python scripts/train_lora.py --config configs/cogvideox_lora.yaml
+
+model:
+  pretrained_model_name_or_path: "THUDM/CogVideoX-2b"
+  # Alternative: "a-r-r-o-w/LTX-Video" — faster inference, lower ceiling
+  revision: null
+  dtype: "bfloat16"               # bf16 on A100; fp16 on T4/V100
+
+lora:
+  r: 16                           # Rank. Ablation: 4, 8, 16, 32
+  alpha: 32                       # lora_alpha = 2*r is a solid default
+  dropout: 0.05
+  target_modules:                 # DiT attention projections
+    - "to_q"
+    - "to_k"
+    - "to_v"
+    - "to_out.0"
+    - "ff.net.0.proj"
+    - "ff.net.2"
+  bias: "none"
+
+data:
+  video_dir: "data/videos"
+  captions_path: "data/captions.json"
+  num_frames: 16                  # CogVideoX default is 49; use 16 for speed
+  height: 480
+  width: 720
+  max_samples: null               # null = use all
+
+training:
+  output_dir: "checkpoints/lora"
+  num_epochs: 3
+  batch_size: 1
+  gradient_accumulation_steps: 4  # effective batch = 4
+  learning_rate: 1.0e-4           # LoRA LR (higher than full fine-tune)
+  lr_scheduler: "cosine"
+  lr_warmup_steps: 100
+  max_grad_norm: 1.0
+  mixed_precision: "bf16"         # "bf16" | "fp16" | "no"
+  dataloader_num_workers: 4
+  checkpointing_steps: 500
+  logging_steps: 50
+  seed: 42
+
+optimizer:
+  name: "adamw"
+  weight_decay: 1.0e-2
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+wandb:
+  project: "video-generation-rlhf"
+  run_name: "lora-r16"
+  enabled: true
