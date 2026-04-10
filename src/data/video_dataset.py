@@ -1,14 +1,28 @@
 """
 Video dataset for CogVideoX-2B fine-tuning.
 
-Expects a directory layout:
-    data/videos/
-        clip_0001.mp4
-        clip_0002.mp4
-        ...
-    data/captions.json  {"clip_0001": "a cat jumping over a fence", ...}
+Supports three loading modes:
 
-Or a CSV/TSV in WebVid format with columns: videoid, caption, page_dir.
+  "directory"
+      data/videos/clip_0001.mp4 ...
+      data/captions.json  {"clip_0001": "a cat jumping over a fence", ...}
+
+  "webvid"
+      CSV/TSV with columns: videoid, caption, page_dir
+
+  "manifest"
+      JSONL produced by the Video-Curation pipeline.  Each line is a JSON
+      object with at least {"path": "/abs/path/to/clip.mp4", "caption": "..."}.
+      Optional fields retained for traceability: label, blur_score,
+      motion_score, quality_score, is_synthetic, synth_ratio.
+      The `video_dir` argument is ignored in this mode (paths are absolute).
+
+      Typical use:
+          VideoDataset(
+              video_dir="",           # unused
+              captions_path="data/from_curation/manifest.jsonl",
+              mode="manifest",
+          )
 """
 
 import json
@@ -71,9 +85,11 @@ class VideoDataset(Dataset):
     """
     Dataset that yields (video_tensor, caption) pairs for fine-tuning.
 
-    Supports two loading modes:
+    Supports three loading modes:
       - "directory": scans `video_dir` for *.mp4 files, reads captions from a JSON.
       - "webvid": reads a CSV with columns [videoid, caption, page_dir].
+      - "manifest": reads a JSONL file from Video-Curation; each line has at
+        least {"path": "...", "caption": "..."}; video_dir is ignored.
     """
 
     def __init__(
@@ -109,8 +125,16 @@ class VideoDataset(Dataset):
                 for _, row in df.iterrows()
                 if (self.video_dir / row["page_dir"] / f"{row['videoid']}.mp4").exists()
             ]
+        elif mode == "manifest":
+            with open(captions_path) as f:
+                entries = [json.loads(line) for line in f if line.strip()]
+            self.samples = [
+                (entry["path"], entry["caption"])
+                for entry in entries
+                if Path(entry["path"]).exists()
+            ]
         else:
-            raise ValueError(f"Unknown mode: {mode}. Use 'directory' or 'webvid'.")
+            raise ValueError(f"Unknown mode: {mode}. Use 'directory', 'webvid', or 'manifest'.")
 
         if max_samples is not None:
             self.samples = self.samples[:max_samples]

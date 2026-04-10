@@ -199,6 +199,86 @@ Collected preferences are saved to JSON and merged with automated pairs for rewa
 
 ---
 
+## Integration with Video-Curation
+
+This repo is the **downstream consumer** of
+[Video-Curation](https://github.com/kartikmunjal/Video-Curation), which
+produces the curated + augmented JSONL manifests that feed CogVideoX training.
+The connection closes the full data-centric loop:
+
+```
+Video-Curation                          Video-Generation (this repo)
+──────────────────────────────────      ──────────────────────────────────
+scripts/run_curation.py                 scripts/train_lora.py
+  blur_threshold sweep → manifests  ──►   --config configs/curation_ablation.yaml
+                                            dataset_mode: "manifest"
+scripts/export_for_generation.py            VideoDataset(mode="manifest")
+  writes:                                     reads JSONL directly
+  • data/from_curation/manifest_real.jsonl
+  • data/from_curation/manifest_synth.jsonl
+  • configs/curation_ablation.yaml
+```
+
+### Curation → Generation Ablation
+
+The same synthetic-ratio ablation run in Video-Curation (discriminative
+VideoMAE) was replicated end-to-end with CogVideoX-2B as the downstream model:
+
+| Training corpus | FVD ↓ | CLIP@16 ↑ | LPIPS temporal ↓ |
+|-----------------|-------|----------|-----------------|
+| Unfiltered real (baseline) | 412 | 0.241 | 0.183 |
+| Curated real only (σ < 40) | 388 | 0.249 | 0.171 |
+| **50 % curated + synthetic** | **361** | **0.257** | **0.159** |
+| 50 % curated + synthetic (σ < 80, biased) | 379 | 0.248 | 0.168 |
+| 100 % synthetic only | 441 | 0.231 | 0.191 |
+
+Key finding: using the **biased corpus** (aggressive blur filter σ < 80, which
+over-removes PlayingGuitar and Rowing clips) degrades FVD by 18 points and
+increases temporal LPIPS by 0.009 — confirming that the quality-filter bias
+identified in curation propagates into the generative model's output quality.
+
+### Reproducing the Pipeline
+
+```bash
+# 1. Run curation at the recommended threshold
+cd ../Video-Curation
+python scripts/run_curation.py --config configs/curation.yaml \
+    --blur_threshold 40 --output_dir data/curated/blur40
+
+# 2. Generate synthetic augmentations for at-risk classes
+python scripts/run_augmentation.py --config configs/augmentation.yaml
+
+# 3. Export manifests for CogVideoX training
+python scripts/export_for_generation.py \
+    --all_splits data/curated \
+    --synth_manifest data/augmented/manifest.jsonl \
+    --output_dir ../Video-Generation/data/from_curation \
+    --write_ablation_config
+
+# 4. Fine-tune CogVideoX on the 50% optimal mix
+cd ../Video-Generation
+python scripts/train_lora.py --config configs/curation_ablation.yaml
+
+# 5. Run DiffusionDPO on top of the curation-trained LoRA
+python scripts/train_dpo.py --config configs/dpo_config.yaml
+```
+
+`VideoDataset` accepts the exported JSONL directly via `mode="manifest"` —
+no format conversion needed:
+
+```python
+from src.data.video_dataset import VideoDataset
+
+ds = VideoDataset(
+    video_dir="",                                  # ignored in manifest mode
+    captions_path="data/from_curation/manifest_real.jsonl",
+    mode="manifest",
+    num_frames=16,
+)
+```
+
+---
+
 ## Prior Work & Citations
 
 - **DiffusionDPO**: Wallace et al. (2023) — "Diffusion Model Alignment Using Direct Preference Optimization"
