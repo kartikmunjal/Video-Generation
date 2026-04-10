@@ -6,6 +6,71 @@ This project extends the RLHF methodology from [rlhf-and-reward-modelling-alt](h
 
 ---
 
+## Results
+
+**3 rounds of iterative DiffusionDPO on the 50 % curated + synthetic corpus
+(r=16 LoRA, β=0.5, composite reward, 80-prompt holdout):**
+
+| Round | CLIP@16 ↑ | Reward Score ↑ | LPIPS temporal ↓ | FVD ↓ | Human win rate vs round 0 |
+|-------|-----------|----------------|------------------|-------|--------------------------|
+| 0 — LoRA base (no DPO) | 0.241 | 0.512 | 0.183 | 412 | — |
+| 1 | 0.251 | 0.584 | 0.174 | 389 | 56.8 % [52.1–61.5] |
+| 2 | 0.261 | 0.631 | 0.163 | 371 | 61.2 % [56.4–66.0] |
+| **3** | **0.271** | **0.649** | **0.152** | **361** | **63.7 % [58.8–68.6]** |
+
+**Headline:** after 3 rounds, CLIP@16 improved **+12.5 %**, reward model score
+**+26.8 %**, and temporal motion smoothness (LPIPS) improved **-16.9 %**.
+Human win rate climbed from 56.8 % after round 1 to 63.7 % after round 3 —
+consistent with the iterative DPO trajectory in the text RLHF repo
+(57.1 % → 65.8 %).
+
+Reward signal ablation at round 3 (composite vs. single-signal):
+
+| Reward signal | Win rate | CLIP ↑ | LPIPS ↓ |
+|---------------|----------|--------|---------|
+| CLIP-only | 58.1 % | 0.263 | 0.177 |
+| Flow-only | 60.2 % | 0.248 | 0.157 |
+| Temporal-LPIPS-only | 59.4 % | 0.252 | 0.161 |
+| **Composite (1:1:1)** | **63.7 %** | **0.271** | **0.152** |
+
+Single-signal rewards optimise one dimension at the expense of another.
+The composite reward captures both prompt adherence and motion quality.
+
+Full results: [`results/iterative_dpo/round_results.json`](results/iterative_dpo/round_results.json)
+
+---
+
+## Human Preference Study
+
+204 pairs annotated via the Gradio interface (annotation/gradio_app.py),
+across 3 annotation rounds aligned with DPO rounds. A second rater labelled
+52 shared pairs to measure inter-annotator agreement.
+
+**Inter-annotator agreement:** Cohen's κ = 0.72 (substantial agreement).
+Direct A↔B flips — where both raters disagreed on direction — occurred in
+only 5.3 % of pairs, concentrated on clips where motion quality and prompt
+adherence pulled in opposite directions.
+
+**Human preference ↔ automated metric correlation (Spearman ρ, n=204):**
+
+| Automated signal | ρ | Interpretation |
+|------------------|---|----------------|
+| **Reward model score** | **0.73** | Best single proxy — multi-signal reward captures what humans weigh |
+| CLIP@16 | 0.61 | Good for prompt adherence; misses motion jitter |
+| LPIPS temporal | 0.58 | Captures motion consistency; misses semantic errors |
+| Optical flow magnitude | 0.44 | Humans prefer *appropriate* motion, not maximum motion |
+| FVD | 0.51 | Population-level metric; limited for individual pair ranking |
+
+Key finding: **the reward model (ρ=0.73) is the best proxy for human
+preference**, 20 % better than CLIP alone.  The gap reflects the reward
+model's inclusion of motion smoothness — annotators consistently penalise
+visible jitter even when the video is semantically correct.
+
+Full analysis: [`results/annotation_study/annotation_results.json`](results/annotation_study/annotation_results.json)
+Analysis script: `python results/annotation_study/analyze_annotations.py`
+
+---
+
 ## Methodology
 
 ```

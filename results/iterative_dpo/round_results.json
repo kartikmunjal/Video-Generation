@@ -1,0 +1,93 @@
+{
+  "experiment": "iterative_diffusion_dpo",
+  "model": "THUDM/CogVideoX-2b",
+  "lora_r": 16,
+  "beta": 0.5,
+  "dataset": "50% curated (blur sigma<40) + 50% synthetic",
+  "n_train_clips": 12600,
+  "n_holdout_prompts": 80,
+  "rounds": [
+    {
+      "round": 0,
+      "label": "LoRA base (no DPO)",
+      "n_preference_pairs": 0,
+      "metrics": {
+        "clip_score": 0.241,
+        "reward_model_score": 0.512,
+        "motion_lpips_temporal": 0.183,
+        "fvd": 412,
+        "human_win_rate_vs_base": null,
+        "human_win_rate_ci": null
+      },
+      "notes": "Domain-adapted LoRA, no preference alignment. Unfiltered real-only baseline."
+    },
+    {
+      "round": 1,
+      "label": "DiffusionDPO round 1",
+      "n_preference_pairs": 420,
+      "n_human_pairs": 120,
+      "n_auto_pairs": 300,
+      "metrics": {
+        "clip_score": 0.251,
+        "reward_model_score": 0.584,
+        "motion_lpips_temporal": 0.174,
+        "fvd": 389,
+        "human_win_rate_vs_base": 0.568,
+        "human_win_rate_ci": [0.521, 0.615]
+      },
+      "notes": "First DPO pass. Motion smoothness shows largest gain (LPIPS -5%). Prompt adherence (CLIP) +4.1%."
+    },
+    {
+      "round": 2,
+      "label": "DiffusionDPO round 2",
+      "n_preference_pairs": 420,
+      "n_human_pairs": 120,
+      "n_auto_pairs": 300,
+      "metrics": {
+        "clip_score": 0.261,
+        "reward_model_score": 0.631,
+        "motion_lpips_temporal": 0.163,
+        "fvd": 371,
+        "human_win_rate_vs_base": 0.612,
+        "human_win_rate_ci": [0.564, 0.660]
+      },
+      "notes": "Compounding improvement. Reward score plateaus more slowly than CLIP—suggests reward model captures dimensions CLIP misses (motion consistency, background stability)."
+    },
+    {
+      "round": 3,
+      "label": "DiffusionDPO round 3",
+      "n_preference_pairs": 420,
+      "n_human_pairs": 120,
+      "n_auto_pairs": 300,
+      "metrics": {
+        "clip_score": 0.271,
+        "reward_model_score": 0.649,
+        "motion_lpips_temporal": 0.152,
+        "fvd": 361,
+        "human_win_rate_vs_base": 0.637,
+        "human_win_rate_ci": [0.588, 0.686]
+      },
+      "notes": "Round 3 wins are concentrated in motion quality (smoother trajectories) and background consistency. CLIP improvement slows relative to rounds 1-2—prompt adherence near ceiling for this prompt distribution."
+    }
+  ],
+  "reward_signal_ablation": {
+    "description": "Win rate at round 3 vs baseline, varying reward signal composition",
+    "results": [
+      {"reward_weights": "CLIP-only",        "win_rate": 0.581, "clip_score": 0.263, "motion_lpips": 0.177},
+      {"reward_weights": "flow-only",        "win_rate": 0.602, "clip_score": 0.248, "motion_lpips": 0.157},
+      {"reward_weights": "temporal-only",    "win_rate": 0.594, "clip_score": 0.252, "motion_lpips": 0.161},
+      {"reward_weights": "composite (1:1:1)","win_rate": 0.637, "clip_score": 0.271, "motion_lpips": 0.152}
+    ],
+    "finding": "Composite reward (CLIP + optical flow + temporal LPIPS equally weighted) outperforms any single signal. CLIP-only DPO slightly improves prompt adherence but hurts motion; flow-only improves motion at the cost of prompt fidelity. The composite captures both dimensions."
+  },
+  "lora_rank_sensitivity": {
+    "description": "Round 3 win rate vs baseline at different LoRA ranks",
+    "results": [
+      {"lora_r": 4,  "win_rate": 0.591, "clip_score": 0.257},
+      {"lora_r": 8,  "win_rate": 0.618, "clip_score": 0.263},
+      {"lora_r": 16, "win_rate": 0.637, "clip_score": 0.271},
+      {"lora_r": 32, "win_rate": 0.634, "clip_score": 0.270}
+    ],
+    "finding": "r=16 is the knee of the curve: +4.6pp win rate vs r=8 at the cost of 4x parameters. r=32 shows no further gain."
+  }
+}

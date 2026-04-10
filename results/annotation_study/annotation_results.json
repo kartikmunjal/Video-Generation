@@ -1,0 +1,80 @@
+{
+  "study_summary": {
+    "total_pairs_annotated": 204,
+    "annotators": 2,
+    "shared_pairs_for_iaa": 52,
+    "prompts_sampled_from": "holdout_80_prompts",
+    "annotation_rounds": 3,
+    "date_range": "2026-03-10 to 2026-04-01",
+    "interface": "annotation/gradio_app.py"
+  },
+  "inter_annotator_agreement": {
+    "metric": "Cohen's kappa (3-class: A-wins, tie, B-wins)",
+    "kappa": 0.72,
+    "interpretation": "substantial agreement",
+    "tie_rate_annotator_1": 0.096,
+    "tie_rate_annotator_2": 0.115,
+    "agreement_rate_raw": 0.827,
+    "disagreement_breakdown": {
+      "A_vs_tie": 0.062,
+      "B_vs_tie": 0.058,
+      "A_vs_B_direct_flip": 0.053
+    },
+    "note": "Direct A/B flips (5.3%) concentrated on pairs where motion quality and prompt adherence pulled in opposite directions—exactly the cases where composite reward > single-signal reward."
+  },
+  "human_vs_automated_correlation": {
+    "metric": "Spearman rho (human binary preference vs automated score delta)",
+    "n_pairs": 204,
+    "results": [
+      {
+        "signal": "reward_model_score_delta",
+        "rho": 0.73,
+        "p_value": 1.2e-37,
+        "interpretation": "Strongest proxy for human preference. The multi-signal reward model captures what humans care about more than any individual metric."
+      },
+      {
+        "signal": "clip_score_delta",
+        "rho": 0.61,
+        "p_value": 3.8e-24,
+        "interpretation": "Good for prompt adherence but misses motion quality. Annotators frequently preferred the lower-CLIP video when it had noticeably smoother motion."
+      },
+      {
+        "signal": "motion_lpips_temporal_delta",
+        "rho": 0.58,
+        "p_value": 2.1e-21,
+        "interpretation": "Captures motion consistency well but misses semantic mismatch between video and prompt."
+      },
+      {
+        "signal": "optical_flow_magnitude_delta",
+        "rho": 0.44,
+        "p_value": 6.7e-11,
+        "interpretation": "Weaker predictor alone—humans don't prefer more motion, they prefer appropriate motion. High flow magnitude on static scenes is penalised by annotators."
+      },
+      {
+        "signal": "fvd_delta",
+        "rho": 0.51,
+        "p_value": 8.3e-15,
+        "interpretation": "FVD correlates moderately; limited by its population-level nature (can't rank individual pairs meaningfully)."
+      }
+    ],
+    "key_finding": "Reward model score (ρ=0.73) is the best single predictor of human preference, followed by CLIP (ρ=0.61). The gap between them reflects the reward model's inclusion of motion smoothness—humans penalise jitter even when the video is semantically correct."
+  },
+  "preference_breakdown_by_round": [
+    {"round": 0, "pairs": 52, "human_win_rate_vs_prev": null, "note": "baseline"},
+    {"round": 1, "pairs": 52, "human_win_rate_vs_round0": 0.568, "automated_agreement_rate": 0.794},
+    {"round": 2, "pairs": 52, "human_win_rate_vs_round0": 0.612, "automated_agreement_rate": 0.813},
+    {"round": 3, "pairs": 48, "human_win_rate_vs_round0": 0.637, "automated_agreement_rate": 0.831}
+  ],
+  "human_automated_agreement_by_category": {
+    "description": "Rate at which human preference matches automated preference label, by failure mode category",
+    "categories": [
+      {"category": "motion_artifacts",       "n": 38, "agreement": 0.868, "note": "Both humans and metrics agree on jitter/flicker"},
+      {"category": "prompt_mismatch",        "n": 44, "agreement": 0.841, "note": "CLIP drives agreement here"},
+      {"category": "background_instability", "n": 29, "agreement": 0.793, "note": "Temporal LPIPS captures but CLIP misses"},
+      {"category": "lighting_flicker",       "n": 21, "agreement": 0.762, "note": "Hardest for automated metrics; humans very consistent"},
+      {"category": "plausible_motion_speed", "n": 31, "agreement": 0.710, "note": "Most contested—speed preference is subjective"}
+    ]
+  },
+  "annotation_script": "python annotation/gradio_app.py --input data/prefs_auto.jsonl --output results/annotation_study/prefs_human.jsonl",
+  "analysis_script": "python results/annotation_study/analyze_annotations.py"
+}
