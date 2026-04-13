@@ -143,6 +143,79 @@ trade a small amount of tilt controllability for larger zoom gains.
 preserving alignment would need a direction-aware reward — one that rewards motion
 *in the prompted direction* rather than minimum frame-to-frame delta.
 
+### Direction-Aware Reward Design
+
+The alignment tax arises because LPIPS-temporal is **direction-agnostic**: it
+penalises large inter-frame differences regardless of whether the motion was
+prompted.  A tilt clip and a static clip with added noise look equally "bad"
+to the reward.
+
+The fix is to decompose optical flow into a **prompted-direction component**
+and a **perpendicular component**, then reward the former while only penalising
+the latter:
+
+```
+Notation
+────────
+F(x, y, t) ∈ ℝ²   optical flow at pixel (x, y) between frames t and t+1
+d(x, y)    ∈ ℝ²   unit direction vector for the prompted motion at pixel (x, y)
+T                  number of frames;  T-1 frame pairs
+(cₓ, cᵧ)          image centre
+```
+
+**Per-frame directional reward** (mean dot product of flow with prompted direction):
+
+```
+r_dir(t) = E_{x,y}[ F(x,y,t) · d(x,y) ]
+```
+
+**Full-clip direction reward** (average over frame pairs):
+
+```
+R_dir(v, m) = 1/(T-1)  Σ_{t=1}^{T-1}  r_dir(t)
+```
+
+The direction field `d(x, y)` is determined entirely by the prompted `MotionType`:
+
+| Prompted motion | Direction field `d(x, y)` | Notes |
+|---|---|---|
+| `ZOOM_IN` | `(x − cₓ, y − cᵧ) / ‖(x − cₓ, y − cᵧ)‖` | radially outward from centre |
+| `ZOOM_OUT` | `(cₓ − x, cᵧ − y) / ‖…‖` | radially inward |
+| `PAN_RIGHT` | `(1, 0)` | uniform horizontal |
+| `PAN_LEFT` | `(−1, 0)` | uniform horizontal |
+| `TILT_DOWN` | `(0, 1)` | uniform vertical |
+| `TILT_UP` | `(0, −1)` | uniform vertical |
+
+**Key properties:**
+
+1. **Direction-sensitive:** a slow zoom generates positive `R_dir` for a zoom
+   prompt; an equally slow pan in response to a zoom prompt generates ~0 (flows
+   are orthogonal to the radial direction field).  The base LPIPS reward cannot
+   distinguish these two cases.
+
+2. **Magnitude-tolerant for on-axis motion:** a fast tilt that is fully on-axis
+   scores the same *normalised projection* as a slow on-axis tilt.  This
+   directly eliminates the alignment tax: the reward no longer penalises the
+   large inter-frame displacements that make fast motions hard to classify.
+
+3. **Perpendicular jitter still penalised:** off-axis noise (camera shake
+   perpendicular to the prompted direction) gets no reward and can be penalised
+   by a separate perpendicular-LPIPS term.
+
+**Composite reward incorporating direction-awareness:**
+
+```
+R_composite = α · R_CLIP  +  β · R_dir  +  γ · (−LPIPS_perp)
+
+where  LPIPS_perp  measures frame delta in the perpendicular subspace only:
+  LPIPS_perp(t) = LPIPS( F_perp(t),  0 )
+  F_perp(x,y,t) = F(x,y,t) − [F(x,y,t) · d(x,y)] · d(x,y)
+```
+
+Weighting `β > γ` rewards controllability fidelity; setting `β ≈ γ` recovers
+a balance between directional fidelity and off-axis smoothness.  The existing
+reward model score can be retained as a fourth term for perceptual quality.
+
 See: `src/evaluation/camera_control.py` — `estimate_homography_motion()`, `controllability_report()`
 
 ---
