@@ -6,6 +6,23 @@ This project extends the RLHF methodology from [rlhf-and-reward-modelling-alt](h
 
 ---
 
+## Research Lineage
+
+This repo is the middle of a three-repo video stack:
+
+| Stage | Repo | Role |
+|-------|------|------|
+| Data | [`Video-Curation`](https://github.com/kartikmunjal/Video-Curation) | Builds curated and synthetic video mixtures; measures data-composition bias. |
+| Training | `Video-Generation` | Fine-tunes CogVideoX with LoRA and iterative DiffusionDPO. |
+| Evaluation | [`Video-Quality-Reward-Modeling`](https://github.com/kartikmunjal/Video-Quality-Reward-Modeling) | Validates CLIP, LPIPS, motion, FVD, and composite rewards against human preference pairs. |
+
+The upstream method source is
+[`rlhf-and-reward-modelling-alt`](https://github.com/kartikmunjal/rlhf-and-reward-modelling-alt):
+the same reward-hacking and preference-optimization questions are tested here in
+a diffusion-video setting.
+
+---
+
 ## Results
 
 **3 rounds of iterative DiffusionDPO on the 50 % curated + synthetic corpus
