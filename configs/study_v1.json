@@ -1,0 +1,23 @@
+{
+  "study_id": "ucf101_reward_guided_augmentation_v1",
+  "status": "preregistered",
+  "official_splits": [1, 2, 3],
+  "optimization_seeds": [2025, 2026, 2027],
+  "arms": ["none", "random", "reward_guided", "pixel_fidelity_diagnostic"],
+  "candidates_per_source": 4,
+  "training_sources_per_class": 25,
+  "selected_augmentations_per_source": 1,
+  "reward_gap_rejection_threshold": 0.75,
+  "candidate_transformations": {
+    "speed_factor": 0.8,
+    "brightness_multiplier": 0.8,
+    "h264_crf": 28,
+    "temporal_crop_fraction": 0.8
+  },
+  "statistics": {
+    "bootstrap_replicates": 2000,
+    "confidence_level": 0.95,
+    "multiplicity": "holm"
+  },
+  "budget_policy": "fixed_sources_examples_optimizer_steps"
+}

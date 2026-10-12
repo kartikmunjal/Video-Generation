@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: "Reward-Guided Video Augmentation"
+message: "Please cite this software and the exact generated study report."
+type: software
+authors:
+  - family-names: Munjal
+    given-names: Kartik
+version: 0.2.0
+date-released: 2026-09-28
+license: MIT

@@ -1,0 +1,89 @@
+{
+  "study_id": "ucf101_reward_guided_augmentation_v1",
+  "n_trials": 3,
+  "n_optimization_seeds": 3,
+  "test_predictions_per_arm": 33639,
+  "bootstrap_replicates": 2000,
+  "primary": {
+    "guided_minus_random_macro_recall": {
+      "estimate": 0.0011434835381514115,
+      "ci95": [
+        -0.002269823291368932,
+        0.0051849501172122735
+      ],
+      "p_raw": 0.568,
+      "p_holm": 0.568
+    },
+    "guided_minus_random_worst_decile_recall": {
+      "estimate": 0.01528416429807176,
+      "ci95": [
+        -0.0023573280537395663,
+        0.03232704378900706
+      ],
+      "p_raw": 0.108,
+      "p_holm": 0.216
+    }
+  },
+  "quality_rejection_rate": {
+    "estimate": 0.42534653465346534,
+    "ci95": [
+      0.41056105610561056,
+      0.4401320132013201
+    ]
+  },
+  "selection_frequency": {
+    "random": {
+      "brightness_multiplier": 1940,
+      "h264_crf": 1920,
+      "speed_factor": 1853,
+      "temporal_crop_fraction": 1862
+    },
+    "reward_guided": {
+      "clean_duplicate": 3222,
+      "h264_crf": 458,
+      "speed_factor": 3340,
+      "temporal_crop_fraction": 555
+    },
+    "pixel_fidelity_diagnostic": {
+      "brightness_multiplier": 1,
+      "h264_crf": 7533,
+      "temporal_crop_fraction": 41
+    }
+  },
+  "mechanism": {
+    "n_split_class_cells": 303,
+    "spearman_reward_gap_vs_error_delta": {
+      "estimate": -0.014704855226864986,
+      "ci95": [
+        -0.11983217847194878,
+        0.09724982098041164
+      ]
+    }
+  },
+  "run_summary": {
+    "none": {
+      "fit_seconds_mean": 0.43170167779963875,
+      "optimizer_iterations_min": 22,
+      "optimizer_iterations_max": 27,
+      "train_examples": 5050
+    },
+    "pixel_fidelity_diagnostic": {
+      "fit_seconds_mean": 0.43697636670226025,
+      "optimizer_iterations_min": 23,
+      "optimizer_iterations_max": 26,
+      "train_examples": 5050
+    },
+    "random": {
+      "fit_seconds_mean": 0.4207287444991784,
+      "optimizer_iterations_min": 24,
+      "optimizer_iterations_max": 24,
+      "train_examples": 5050
+    },
+    "reward_guided": {
+      "fit_seconds_mean": 0.4450350555384325,
+      "optimizer_iterations_min": 23,
+      "optimizer_iterations_max": 28,
+      "train_examples": 5050
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "study_id": "ucf101_reward_guided_augmentation_v1",
+  "frozen_at_utc": "2026-09-29T03:22:49.820417+00:00",
+  "config_sha256": "22a03f508a59149eccf77dbce9aead7369e2cea2738df78928227f5c309a5501",
+  "parent_artifacts": [
+    {
+      "path": "../video-curation/preregistration_manifest.json",
+      "bytes": 1928,
+      "sha256": "84ffe472c255d0f36c3cbd5282ee27068fd6f46ebfce510e15fe0f6498886b85"
+    },
+    {
+      "path": "../video-curation/results/confirmatory/raw/official_assignments.jsonl",
+      "bytes": 21680092,
+      "sha256": "e53f7e59070cea0436053260413e553b1ac5703f304cd328ac71d74922bb5ffa"
+    },
+    {
+      "path": "../video-curation/results/confirmatory/raw/r3d18_features.npz",
+      "bytes": 25286439,
+      "sha256": "7036c4526b3cda19bfa1048ca7a0ec5b3033bbd675d371cb40150f1693c1c7cc"
+    },
+    {
+      "path": "../video-quality-reward-modeling/preregistration_manifest.json",
+      "bytes": 1213,
+      "sha256": "df26f54a2ce82df8613c3d5c0cbbb610d8552e8f55187f561c7afed70c2d4de8"
+    },
+    {
+      "path": "../video-quality-reward-modeling/results/confirmatory/models/fit_metrics.json",
+      "bytes": 2352,
+      "sha256": "569ef69333b8aff3b48597466bd175ff4e8bff300427dea521a8f4bbaccf11a6"
+    },
+    {
+      "path": "../video-quality-reward-modeling/results/confirmatory/models/reward_split1.joblib",
+      "bytes": 2302,
+      "sha256": "cb232ed46fa7030fe77915a6ad901c06b11f19fbf99b9da6a05e10eb4fe711c4"
+    },
+    {
+      "path": "../video-quality-reward-modeling/results/confirmatory/models/reward_split2.joblib",
+      "bytes": 2302,
+      "sha256": "f8a12c74c859fdcb370acf3117f0d78baf80e6a97a57f4b65ce9fcfaa6770040"
+    },
+    {
+      "path": "../video-quality-reward-modeling/results/confirmatory/models/reward_split3.joblib",
+      "bytes": 2302,
+      "sha256": "41ababeed7520aa88d32f1154258f8a10af0eb1997ea17fc90d62bf2772f7737"
+    },
+    {
+      "path": "RESEARCH_PLAN.md",
+      "bytes": 3504,
+      "sha256": "a51c3ebc973306db8aab696791b175bd7a86d2405f3cb960c92d31665caa1f46"
+    }
+  ]
+}

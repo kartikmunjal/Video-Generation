@@ -1,4 +1,6 @@
 {
+  "evidence_status": "legacy_unverified_do_not_cite",
+  "evidence_note": "No raw generations, checkpoints, logs, or annotation rows are committed; excluded from confirmatory reporting.",
   "experiment": "iterative_diffusion_dpo",
   "model": "THUDM/CogVideoX-2b",
   "lora_r": 16,

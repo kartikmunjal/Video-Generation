@@ -49,6 +49,7 @@ def diffusion_elbo(
     attention_mask: torch.Tensor,
     num_timesteps: int = 50,
     device: str = "cuda",
+    mc_seed: Optional[int] = None,
 ) -> torch.Tensor:
     """
     Estimate log p_θ(v|c) via the diffusion ELBO on uniformly sampled timesteps.
@@ -78,7 +79,10 @@ def diffusion_elbo(
     # Encode video to latent space (frozen VAE)
     with torch.no_grad():
         flat_frames = frames.view(B * T, C, H, W)
-        latents = vae.encode(flat_frames).latent_dist.sample()
+        generator = None
+        if mc_seed is not None:
+            generator = torch.Generator(device=device).manual_seed(mc_seed)
+        latents = vae.encode(flat_frames).latent_dist.sample(generator=generator)
         latents = latents.view(B, T, *latents.shape[1:]).permute(0, 2, 1, 3, 4)
         latents = latents * vae.config.scaling_factor
 
@@ -91,8 +95,9 @@ def diffusion_elbo(
     max_t = noise_scheduler.config.num_train_timesteps
 
     for _ in range(num_timesteps):
-        t = torch.randint(0, max_t, (B,), device=device).long()
-        noise = torch.randn_like(latents)
+        t = torch.randint(0, max_t, (B,), device=device, generator=generator).long()
+        noise = torch.randn(latents.shape, device=latents.device, dtype=latents.dtype,
+                            generator=generator)
         noisy_latents = noise_scheduler.add_noise(latents, noise, t)
 
         noise_pred = transformer(
@@ -228,7 +233,12 @@ class DiffusionDPOTrainer:
         train_n = int(len(dataset) * data_cfg.get("train_split", 0.9))
         val_n = len(dataset) - train_n
         from torch.utils.data import random_split
-        train_ds, val_ds = random_split(dataset, [train_n, val_n])
+        split_seed = int(tr_cfg.get("seed", 42))
+        train_ds, val_ds = random_split(
+            dataset,
+            [train_n, val_n],
+            generator=torch.Generator().manual_seed(split_seed),
+        )
 
         self.train_loader = DataLoader(
             train_ds, batch_size=tr_cfg["batch_size"], shuffle=True,
@@ -269,6 +279,7 @@ class DiffusionDPOTrainer:
         self.beta = dpo_cfg["beta"]
         self.num_timesteps = dpo_cfg.get("num_timesteps", 50)
         self.label_smoothing = dpo_cfg.get("label_smoothing", 0.0)
+        self._mc_step = 0
 
     def _tokenize_prompts(self, prompts):
         tokens = self.tokenizer(
@@ -294,23 +305,30 @@ class DiffusionDPOTrainer:
             num_timesteps=self.num_timesteps,
             device=str(self.device),
         )
+        chosen_seed = int(self.config["training"].get("seed", 42)) + 2 * self._mc_step
+        rejected_seed = chosen_seed + 1
+        self._mc_step += 1
 
         # Reference ELBOs (no gradient)
         with torch.no_grad():
             ref_chosen_elbo = diffusion_elbo(
-                self.ref_policy.transformer, frames=chosen_frames, **kwargs
+                self.ref_policy.transformer, frames=chosen_frames,
+                mc_seed=chosen_seed, **kwargs
             )
             ref_rejected_elbo = diffusion_elbo(
-                self.ref_policy.transformer, frames=rejected_frames, **kwargs
+                self.ref_policy.transformer, frames=rejected_frames,
+                mc_seed=rejected_seed, **kwargs
             )
 
         # Policy ELBOs (with gradient for policy, not reference)
         with self.accelerator.accumulate(self.policy.transformer):
             policy_chosen_elbo = diffusion_elbo(
-                self.policy.transformer, frames=chosen_frames, **kwargs
+                self.policy.transformer, frames=chosen_frames,
+                mc_seed=chosen_seed, **kwargs
             )
             policy_rejected_elbo = diffusion_elbo(
-                self.policy.transformer, frames=rejected_frames, **kwargs
+                self.policy.transformer, frames=rejected_frames,
+                mc_seed=rejected_seed, **kwargs
             )
 
             loss, r_chosen, r_rejected = dpo_loss(

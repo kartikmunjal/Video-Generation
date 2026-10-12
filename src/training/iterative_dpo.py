@@ -35,6 +35,7 @@ from tqdm import tqdm
 
 from ..data.preference_dataset import VideoPreferenceDataset, save_preference_jsonl, load_preference_jsonl
 from ..data.video_metrics import compute_video_metrics
+from ..data.video_metrics import compute_motion_smoothness, compute_temporal_consistency
 from ..models.lora_adapter import CogVideoXLoRA
 from ..models.video_reward_model import VideoRewardModel
 from .dpo_video import DiffusionDPOTrainer, diffusion_elbo
@@ -153,8 +154,12 @@ class IterativeDPOLoop:
             frames_b = load_video_frames(path_b, num_frames, height, width)
 
             with torch.no_grad():
-                out_a = self.reward_model(frames_a.unsqueeze(0).to(self.device))
-                out_b = self.reward_model(frames_b.unsqueeze(0).to(self.device))
+                motion_a = torch.tensor([compute_motion_smoothness(frames_a)], device=self.device)
+                motion_b = torch.tensor([compute_motion_smoothness(frames_b)], device=self.device)
+                temporal_a = torch.tensor([compute_temporal_consistency(frames_a)], device=self.device)
+                temporal_b = torch.tensor([compute_temporal_consistency(frames_b)], device=self.device)
+                out_a = self.reward_model(frames_a.unsqueeze(0).to(self.device), motion_a, temporal_a)
+                out_b = self.reward_model(frames_b.unsqueeze(0).to(self.device), motion_b, temporal_b)
 
             score_a = out_a.rewards.item()
             score_b = out_b.rewards.item()
@@ -246,7 +251,7 @@ class IterativeDPOLoop:
             device=str(self.device),
         )
 
-    def _evaluate_win_rate(self, iteration: int) -> float:
+    def _evaluate_reward_model_win_rate(self, iteration: int) -> float:
         """
         Compute win rate: fraction of eval prompts where the current policy
         generates a higher-reward video than the baseline.
@@ -286,8 +291,12 @@ class IterativeDPOLoop:
             frames_b = load_video_frames(baseline_path, num_frames, height, width)
 
             with torch.no_grad():
-                score_p = self.reward_model(frames_p.unsqueeze(0).to(self.device)).rewards.item()
-                score_b = self.reward_model(frames_b.unsqueeze(0).to(self.device)).rewards.item()
+                motion_p = torch.tensor([compute_motion_smoothness(frames_p)], device=self.device)
+                motion_b = torch.tensor([compute_motion_smoothness(frames_b)], device=self.device)
+                temporal_p = torch.tensor([compute_temporal_consistency(frames_p)], device=self.device)
+                temporal_b = torch.tensor([compute_temporal_consistency(frames_b)], device=self.device)
+                score_p = self.reward_model(frames_p.unsqueeze(0).to(self.device), motion_p, temporal_p).rewards.item()
+                score_b = self.reward_model(frames_b.unsqueeze(0).to(self.device), motion_b, temporal_b).rewards.item()
 
             if score_p > score_b:
                 wins += 1
@@ -325,8 +334,9 @@ class IterativeDPOLoop:
             # 4. Evaluate
             win_rate = None
             if iteration % eval_every == 0:
-                win_rate = self._evaluate_win_rate(iteration)
-                history.append({"iteration": iteration, "win_rate": win_rate, "n_pairs": len(buffer_records)})
+                win_rate = self._evaluate_reward_model_win_rate(iteration)
+                history.append({"iteration": iteration, "reward_model_win_rate": win_rate,
+                                "n_pairs": len(buffer_records)})
 
                 # Save history
                 with open(os.path.join(self.base_dir, "history.json"), "w") as f:
@@ -337,5 +347,6 @@ class IterativeDPOLoop:
                     break
 
         print(f"\nIterative DPO complete. Final checkpoint: {self._last_checkpoint_path}")
-        print(f"Win rate history: {[f'{h[\"win_rate\"]:.3f}' for h in history]}")
+        formatted_history = [f"{h['reward_model_win_rate']:.3f}" for h in history]
+        print(f"Reward-model win-rate history: {formatted_history}")
         return self._last_checkpoint_path, history

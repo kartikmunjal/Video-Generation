@@ -119,6 +119,14 @@ class VideoRewardModel(nn.Module):
         B, T, C, H, W = frames.shape
         flat = frames.view(B * T, C, H, W)
 
+        # Dataset frames are in [-1, 1]; OpenAI CLIP expects resized [0, 1]
+        # tensors normalized by its published channel statistics.
+        flat = (flat.float() + 1.0) / 2.0
+        flat = F.interpolate(flat, size=(224, 224), mode="bicubic", align_corners=False)
+        mean = torch.tensor([0.48145466, 0.4578275, 0.40821073], device=flat.device).view(1, 3, 1, 1)
+        std = torch.tensor([0.26862954, 0.26130258, 0.27577711], device=flat.device).view(1, 3, 1, 1)
+        flat = (flat - mean) / std
+
         with torch.no_grad():
             features = self.clip.encode_image(flat)  # (B*T, D)
         features = F.normalize(features, dim=-1)

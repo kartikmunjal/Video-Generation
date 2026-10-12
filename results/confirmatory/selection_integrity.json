@@ -1,0 +1,10 @@
+{
+  "study_id": "ucf101_reward_guided_augmentation_v1",
+  "status": "passed",
+  "sources_checked": 7575,
+  "official_splits": 3,
+  "classes_per_split": 101,
+  "sources_per_class": 25,
+  "source_hashes_verified": true,
+  "train_test_overlap": 0
+}

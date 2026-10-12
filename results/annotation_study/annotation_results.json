@@ -1,4 +1,6 @@
 {
+  "evidence_status": "legacy_unverified_do_not_cite",
+  "evidence_note": "No raw annotation export or source videos are committed; excluded from confirmatory reporting.",
   "study_summary": {
     "total_pairs_annotated": 204,
     "annotators": 2,
